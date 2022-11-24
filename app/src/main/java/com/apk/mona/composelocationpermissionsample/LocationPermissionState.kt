@@ -79,14 +79,14 @@ class LocationPermissionState constructor(
     private fun isFineLocationGranted(context: Context): Boolean {
         return ContextCompat.checkSelfPermission(
             context,
-            android.Manifest.permission.ACCESS_FINE_LOCATION
+            Manifest.permission.ACCESS_FINE_LOCATION
         ) == PackageManager.PERMISSION_GRANTED
     }
 
     private fun isCoarseLocationGranted(context: Context): Boolean {
         return ContextCompat.checkSelfPermission(
             context,
-            android.Manifest.permission.ACCESS_COARSE_LOCATION
+            Manifest.permission.ACCESS_COARSE_LOCATION
         ) == PackageManager.PERMISSION_GRANTED
     }
 
@@ -120,6 +120,9 @@ class LocationPermissionState constructor(
             permissionState.status.isGranted
         } || multiplePermissionsState.revokedPermissions.isEmpty()
     }
+
+    val shouldShowRationale
+        get() = multiplePermissionsState.shouldShowRationale
 
     var shouldOpenLocationRequestDialog: Boolean by mutableStateOf(false)
 
