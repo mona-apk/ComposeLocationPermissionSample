@@ -1,6 +1,9 @@
 package com.apk.mona.composelocationpermissionsample
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Box
@@ -40,16 +43,33 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun LocationRequestScreen(modifier: Modifier = Modifier) {
     val context = LocalContext.current
-    val locationPermissionState = rememberLocationPermissionState()
 
     var locationStateText by remember {
         mutableStateOf("")
     }
 
-    LaunchedEffect(locationPermissionState.isLocationGranted, locationPermissionState.shouldShowRationale) {
-        val isSystemLocationEnabled = locationPermissionState.isSystemLocationEnabled(context)
+    val locationPermissionState = rememberLocationPermissionState()
+
+    if (locationPermissionState.shouldOpenLocationRequestDialog) {
+        LocationRequestDialog(
+            onConfirmClick = {
+                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                val uri = Uri.fromParts("package", context.packageName, null)
+                intent.data = uri
+                context.startActivity(intent)
+            },
+            onDismissRequest = locationPermissionState::onDismissRequest,
+        )
+    }
+
+    LaunchedEffect(
+        locationPermissionState.isLocationGranted,
+        locationPermissionState.shouldShowRationale,
+        locationPermissionState.isDeviceLocationEnabled
+    ) {
         locationStateText = when {
-            locationPermissionState.isLocationGranted && isSystemLocationEnabled -> {
+            locationPermissionState.isLocationGranted && locationPermissionState.isDeviceLocationEnabled -> {
                 "App and device location permissions are granted."
             }
             locationPermissionState.isLocationGranted -> {
@@ -70,7 +90,7 @@ fun LocationRequestScreen(modifier: Modifier = Modifier) {
         LocationRequestPage(
             locationStateText = locationStateText,
             onClick = {
-                locationPermissionState.requestLocationPermission(context = context)
+                locationPermissionState.requestLocationPermission()
             },
             modifier = Modifier.padding(insetsPadding)
         )
