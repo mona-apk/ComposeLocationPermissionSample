@@ -11,11 +11,15 @@ import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.core.content.ContextCompat
 import androidx.core.location.LocationManagerCompat
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
@@ -41,31 +45,51 @@ fun rememberLocationPermissionState(
     ),
     onResult: (ActivityResult) -> Unit = {},
 ): LocationPermissionState {
+    val context = LocalContext.current
+    val windowManager = LocalWindowInfo.current
+
+    val locationPermissionState = remember {
+        LocationPermissionState(
+            context = context,
+            multiplePermissionsState = multiplePermissionsState,
+        )
+    }
+
+    LaunchedEffect(windowManager.isWindowFocused) {
+        if (!windowManager.isWindowFocused) return@LaunchedEffect
+        locationPermissionState.refreshDeviceLocation()
+    }
+
     val activityResultLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartIntentSenderForResult(),
     ) { activityResult ->
+        locationPermissionState.refreshDeviceLocation()
         onResult(activityResult)
     }
 
-    return remember {
-        LocationPermissionState(
-            multiplePermissionsState = multiplePermissionsState,
-            activityResultLauncher = activityResultLauncher,
-        )
+    DisposableEffect(locationPermissionState, activityResultLauncher) {
+        locationPermissionState.activityResultLauncher = activityResultLauncher
+        onDispose {
+            locationPermissionState.activityResultLauncher = null
+        }
     }
+
+    return locationPermissionState
 }
 
 @OptIn(ExperimentalPermissionsApi::class)
 class LocationPermissionState constructor(
+    private val context: Context,
     val multiplePermissionsState: MultiplePermissionsState,
-    private val activityResultLauncher: ActivityResultLauncher<IntentSenderRequest>,
 ) {
-    fun requestLocationPermission(context: Context) {
-        when {
-            isFineLocationGranted(context = context) || isCoarseLocationGranted(context = context) -> {
-                if (isSystemLocationEnabled(context = context)) return
+    internal var activityResultLauncher: ActivityResultLauncher<IntentSenderRequest>? = null
 
-                showSystemLocationRequestDialog(context = context)
+    fun requestLocationPermission() {
+        when {
+            isFineLocationGranted() || isCoarseLocationGranted() -> {
+                if (isLocationEnabled()) return
+
+                showSystemLocationRequestDialog()
             }
             multiplePermissionsState.shouldShowRationale -> {
                 shouldOpenLocationRequestDialog = true
@@ -76,26 +100,47 @@ class LocationPermissionState constructor(
         }
     }
 
-    private fun isFineLocationGranted(context: Context): Boolean {
+    val isLocationGranted by derivedStateOf {
+        multiplePermissionsState.permissions.any { permissionState ->
+            permissionState.status.isGranted
+        } || multiplePermissionsState.revokedPermissions.isEmpty()
+    }
+
+    var isDeviceLocationEnabled: Boolean by mutableStateOf(isLocationEnabled())
+
+    internal fun refreshDeviceLocation() {
+        isDeviceLocationEnabled = isLocationEnabled()
+    }
+
+    val shouldShowRationale
+        get() = multiplePermissionsState.shouldShowRationale
+
+    var shouldOpenLocationRequestDialog: Boolean by mutableStateOf(false)
+
+    fun onDismissRequest() {
+        shouldOpenLocationRequestDialog = false
+    }
+
+    private fun isFineLocationGranted(): Boolean {
         return ContextCompat.checkSelfPermission(
             context,
             Manifest.permission.ACCESS_FINE_LOCATION
         ) == PackageManager.PERMISSION_GRANTED
     }
 
-    private fun isCoarseLocationGranted(context: Context): Boolean {
+    private fun isCoarseLocationGranted(): Boolean {
         return ContextCompat.checkSelfPermission(
             context,
             Manifest.permission.ACCESS_COARSE_LOCATION
         ) == PackageManager.PERMISSION_GRANTED
     }
 
-    fun isSystemLocationEnabled(context: Context): Boolean {
+    private fun isLocationEnabled(): Boolean {
         val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
         return LocationManagerCompat.isLocationEnabled(locationManager)
     }
 
-    private fun showSystemLocationRequestDialog(context: Context) {
+    private fun showSystemLocationRequestDialog() {
         val builder = LocationSettingsRequest.Builder().addLocationRequest(
             LocationRequest.Builder(0L).build()
         )
@@ -108,25 +153,10 @@ class LocationPermissionState constructor(
                 try {
                     // 端末の位置情報を ON に促すダイアログを表示
                     val intentSenderRequest = IntentSenderRequest.Builder(exception.resolution).build()
-                    activityResultLauncher.launch(intentSenderRequest)
+                    activityResultLauncher?.launch(intentSenderRequest) ?: error("ActivityResultLauncher cannot be null")
                 } catch (_: IntentSender.SendIntentException) {
                 }
             }
         }
-    }
-
-    val isLocationGranted by derivedStateOf {
-        multiplePermissionsState.permissions.any { permissionState ->
-            permissionState.status.isGranted
-        } || multiplePermissionsState.revokedPermissions.isEmpty()
-    }
-
-    val shouldShowRationale
-        get() = multiplePermissionsState.shouldShowRationale
-
-    var shouldOpenLocationRequestDialog: Boolean by mutableStateOf(false)
-
-    fun onDismissRequest() {
-        shouldOpenLocationRequestDialog = false
     }
 }
