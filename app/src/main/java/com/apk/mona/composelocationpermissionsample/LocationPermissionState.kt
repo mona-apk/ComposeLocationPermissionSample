@@ -151,7 +151,6 @@ class LocationPermissionState constructor(
         task.addOnFailureListener { exception ->
             if (exception is ResolvableApiException) {
                 try {
-                    // 端末の位置情報を ON に促すダイアログを表示
                     val intentSenderRequest = IntentSenderRequest.Builder(exception.resolution).build()
                     activityResultLauncher?.launch(intentSenderRequest) ?: error("ActivityResultLauncher cannot be null")
                 } catch (_: IntentSender.SendIntentException) {
