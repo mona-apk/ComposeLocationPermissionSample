@@ -13,6 +13,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -49,7 +50,7 @@ fun rememberLocationPermissionState(
     val windowManager = LocalWindowInfo.current
 
     val locationPermissionState = remember {
-        LocationPermissionState(
+        MutableLocationPermissionState(
             context = context,
             multiplePermissionsState = multiplePermissionsState,
         )
@@ -77,14 +78,25 @@ fun rememberLocationPermissionState(
     return locationPermissionState
 }
 
+@Stable
+interface LocationPermissionState {
+    fun requestLocationPermission()
+    val isLocationGranted: Boolean
+    val isDeviceLocationEnabled: Boolean
+    val shouldShowRationale: Boolean
+    val shouldOpenLocationRequestDialog: Boolean
+    fun onDismissRequest()
+}
+
 @OptIn(ExperimentalPermissionsApi::class)
-class LocationPermissionState constructor(
+@Stable
+internal class MutableLocationPermissionState constructor(
     private val context: Context,
-    val multiplePermissionsState: MultiplePermissionsState,
-) {
+    private val multiplePermissionsState: MultiplePermissionsState,
+) : LocationPermissionState {
     internal var activityResultLauncher: ActivityResultLauncher<IntentSenderRequest>? = null
 
-    fun requestLocationPermission() {
+    override fun requestLocationPermission() {
         when {
             isFineLocationGranted() || isCoarseLocationGranted() -> {
                 if (isLocationEnabled()) return
@@ -100,24 +112,24 @@ class LocationPermissionState constructor(
         }
     }
 
-    val isLocationGranted by derivedStateOf {
+    override val isLocationGranted by derivedStateOf {
         multiplePermissionsState.permissions.any { permissionState ->
             permissionState.status.isGranted
         } || multiplePermissionsState.revokedPermissions.isEmpty()
     }
 
-    var isDeviceLocationEnabled: Boolean by mutableStateOf(isLocationEnabled())
+    override var isDeviceLocationEnabled: Boolean by mutableStateOf(isLocationEnabled())
 
     internal fun refreshDeviceLocation() {
         isDeviceLocationEnabled = isLocationEnabled()
     }
 
-    val shouldShowRationale
+    override val shouldShowRationale
         get() = multiplePermissionsState.shouldShowRationale
 
-    var shouldOpenLocationRequestDialog: Boolean by mutableStateOf(false)
+    override var shouldOpenLocationRequestDialog: Boolean by mutableStateOf(false)
 
-    fun onDismissRequest() {
+    override fun onDismissRequest() {
         shouldOpenLocationRequestDialog = false
     }
 
