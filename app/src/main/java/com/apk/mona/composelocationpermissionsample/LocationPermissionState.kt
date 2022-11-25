@@ -101,7 +101,7 @@ internal class MutableLocationPermissionState constructor(
             isFineLocationGranted() || isCoarseLocationGranted() -> {
                 if (isLocationEnabled()) return
 
-                showSystemLocationRequestDialog()
+                showDeviceLocationRequestDialog()
             }
             multiplePermissionsState.shouldShowRationale -> {
                 shouldOpenLocationRequestDialog = true
@@ -152,7 +152,7 @@ internal class MutableLocationPermissionState constructor(
         return LocationManagerCompat.isLocationEnabled(locationManager)
     }
 
-    private fun showSystemLocationRequestDialog() {
+    private fun showDeviceLocationRequestDialog() {
         val builder = LocationSettingsRequest.Builder().addLocationRequest(
             LocationRequest.Builder(0L).build()
         )
